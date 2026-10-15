@@ -1,0 +1,15 @@
+FROM localhost/devbox-base:latest
+
+# Bun and oh-my-pi live in /opt/bun inside the image (not the home volume),
+# so a rebuild updates them.
+USER root
+ENV BUN_INSTALL=/opt/bun
+RUN curl -fsSL https://bun.sh/install | bash \
+    && /opt/bun/bin/bun install -g @oh-my-pi/pi-coding-agent \
+    && chmod -R a+rX /opt/bun \
+    && rm -rf /tmp/* /tmp/.[!.]*
+# (Root build steps inherit XDG_RUNTIME_DIR=/tmp/xdg-dev; clearing /tmp keeps
+# a root-owned copy of it from blocking shpool at runtime.)
+ENV PATH=/opt/bun/bin:$PATH
+RUN echo 'export PATH=/opt/bun/bin:$PATH' >> /etc/profile.d/devbox.sh
+USER dev

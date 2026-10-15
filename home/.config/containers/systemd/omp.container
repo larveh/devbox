@@ -1,0 +1,22 @@
+[Unit]
+Description=oh-my-pi dev container
+Requires=devbox-build.service
+After=devbox-build.service
+
+[Container]
+ContainerName=omp
+HostName=omp
+Image=localhost/devbox-omp:latest
+# Container user `dev` (1000) is `core` on the host, so /work stays owned by core.
+UserNS=keep-id:uid=1000,gid=1000
+Volume=omp-home:/home/dev
+# Lowercase z: the workspace is shared with the claude container.
+Volume=%h/work:/work:z
+# Custom model providers: devbox/omp/models.yml (overridable via the overlay).
+Volume=%h/devbox/omp/models.yml:/home/dev/.omp/agent/models.yml:ro,z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,103 @@
+#!/bin/bash
+# Manage the claude/omp dev containers on a Fedora CoreOS host over SSH.
+set -euo pipefail
+
+# Personal settings (DEVBOX_HOST, DEVBOX_OVERLAY) can live in a config file
+# instead of the environment.
+config=${XDG_CONFIG_HOME:-$HOME/.config}/devbox/config
+# shellcheck source=/dev/null
+[[ -f $config ]] && . "$config"
+
+host=${DEVBOX_HOST:-devbox}
+repo=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+# Optional directory that mirrors /var/home/core like home/ does; its files
+# are laid over home/ on deploy and ignition (e.g. devbox/omp/models.yml).
+overlay=${DEVBOX_OVERLAY:-}
+if [[ -n $overlay && ! -d $overlay ]]; then
+    echo "DEVBOX_OVERLAY=$overlay is not a directory." >&2
+    exit 1
+fi
+
+usage() {
+    cat <<EOF
+usage: devbox <command>
+
+  claude [SESSION]   attach to a persistent shell in the claude container
+  omp [SESSION]      attach to a persistent shell in the omp container
+                     (SESSION defaults to "main"; detach: Ctrl-Space Ctrl-q,
+                     or just close the terminal)
+  ls                 list sessions in both containers
+  status             show container and unit status
+  deploy             copy config to $host, build images, start containers
+  refresh            rebuild images now with the latest claude/omp
+  restart            restart containers onto the newest images (ends sessions)
+  ignition           print Ignition JSON for a fresh install (uses your
+                     SSH agent's public keys for user core)
+
+Set DEVBOX_HOST to target a host other than "devbox", and DEVBOX_OVERLAY to a
+directory of your own files to lay over home/ (both can go in $config).
+EOF
+}
+
+containers=(claude omp)
+
+attach() {
+    local c=$1 session=${2:-main}
+    exec ssh -t "$host" podman exec -it -e TERM=xterm-256color "$c" \
+        shpool attach -f "$session"
+}
+
+case ${1:-} in
+    claude|omp)
+        attach "$1" "${2:-}"
+        ;;
+    ls)
+        for c in "${containers[@]}"; do
+            echo "== $c"
+            ssh "$host" podman exec "$c" shpool list || true
+        done
+        ;;
+    status)
+        ssh "$host" 'systemctl --user --no-pager status devbox-build.service claude.service omp.service devbox-refresh.timer | grep -E "^(●|○|×)|Active:|Trigger:"; echo; podman ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"'
+        ;;
+    deploy)
+        echo ">> copying files to $host"
+        {
+            tar -C "$repo/home" -cf - devbox .config
+            [[ -z $overlay ]] || tar -C "$overlay" -cf - .
+        } | ssh "$host" 'tar -C ~ --no-overwrite-dir -xif - && mkdir -p ~/work'
+        echo ">> enabling linger (containers start at boot, not at login)"
+        ssh -t "$host" 'sudo loginctl enable-linger "$USER"'
+        echo ">> building images (first run takes a few minutes, later only changes rebuild)"
+        ssh "$host" 'systemctl --user daemon-reload \
+            && systemctl --user enable --now devbox-refresh.timer \
+            && ~/devbox/build.sh --update \
+            && systemctl --user start devbox-build.service claude.service omp.service'
+        "$0" status
+        echo
+        echo "If the containers were already running, 'devbox restart' applies changes."
+        ;;
+    refresh)
+        ssh "$host" '~/devbox/build.sh --refresh'
+        echo "Images rebuilt. 'devbox restart' switches the containers over."
+        ;;
+    restart)
+        read -rp "This ends all open sessions in claude and omp. Continue? [y/N] " ok
+        [[ $ok == [yY]* ]] || exit 1
+        ssh "$host" 'systemctl --user restart claude.service omp.service'
+        ;;
+    ignition)
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        cp -a "$repo/home/." "$tmp/"
+        [[ -z $overlay ]] || cp -a "$overlay/." "$tmp/"
+        ssh-add -L > "$tmp/authorized_keys" 2>/dev/null \
+            || { echo "No keys in the SSH agent; load one with ssh-add first." >&2; exit 1; }
+        podman run --rm -i -v "$tmp:/files:ro,z" quay.io/coreos/butane:release \
+            --strict --pretty --files-dir /files < "$repo/devbox.bu"
+        ;;
+    *)
+        usage
+        [[ ${1:-} == -h || ${1:-} == --help ]] || exit 1
+        ;;
+esac

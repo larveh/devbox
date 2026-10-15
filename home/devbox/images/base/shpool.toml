@@ -1,0 +1,2 @@
+# New sessions open in the shared workspace rather than $HOME.
+default_dir = "/work"

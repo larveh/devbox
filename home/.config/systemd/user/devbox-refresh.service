@@ -1,0 +1,9 @@
+[Unit]
+Description=Rebuild devbox images with the latest Claude Code and oh-my-pi
+
+# Only rebuilds. Running containers keep the old image until the next restart
+# (`devbox restart` or a reboot), so open sessions are never killed.
+[Service]
+Type=oneshot
+ExecStart=%h/devbox/build.sh --refresh
+TimeoutStartSec=45min

@@ -1,0 +1,20 @@
+[Unit]
+Description=Claude Code dev container
+Requires=devbox-build.service
+After=devbox-build.service
+
+[Container]
+ContainerName=claude
+HostName=claude
+Image=localhost/devbox-claude:latest
+# Container user `dev` (1000) is `core` on the host, so /work stays owned by core.
+UserNS=keep-id:uid=1000,gid=1000
+Volume=claude-home:/home/dev
+# Lowercase z: the workspace is shared with the omp container.
+Volume=%h/work:/work:z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

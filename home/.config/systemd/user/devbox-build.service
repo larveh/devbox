@@ -1,0 +1,8 @@
+[Unit]
+Description=Build devbox images that are missing
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/devbox/build.sh
+TimeoutStartSec=45min

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Terminal title, same as Fedora's default PROMPT_COMMAND. Fedora's
+# /etc/bashrc uses this file instead of its inline printf when it exists.
+# The inline version contains quotes and backslashes that shpool's prompt
+# hook mangles on every prompt ("fg: %s@%s:%s007: no such job").
+printf '\033]0;%s@%s:%s\007' "$USER" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"

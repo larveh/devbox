@@ -1,0 +1,112 @@
+# Fedora CoreOS config for a devbox host: two always-on dev containers
+# (claude, omp) run rootless by `core` under Quadlet.
+#
+# Don't feed this to butane directly: `./devbox ignition > devbox.ign`
+# renders it with the right --files-dir and your SSH public key(s).
+variant: fcos
+version: 1.6.0
+
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys_local:
+        - authorized_keys
+
+storage:
+  directories:
+    # Ignition creates missing parents as root, so every level under
+    # /var/home/core is listed explicitly with core ownership.
+    - { path: /var/home/core/.config, mode: 0700, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/.config/containers, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/.config/containers/systemd, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/.config/systemd, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/.config/systemd/user, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/.config/systemd/user/timers.target.wants, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox/images, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox/images/base, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox/images/claude, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox/images/omp, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/devbox/omp, mode: 0755, user: { name: core }, group: { name: core } }
+    - { path: /var/home/core/work, mode: 0755, user: { name: core }, group: { name: core } }
+
+  files:
+    # Linger: start core's user manager (and so the containers) at boot,
+    # not at first login.
+    - path: /var/lib/systemd/linger/core
+      mode: 0644
+
+    - path: /var/home/core/devbox/build.sh
+      mode: 0755
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/build.sh }
+    - path: /var/home/core/devbox/images/base/Containerfile
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/base/Containerfile }
+    - path: /var/home/core/devbox/images/base/devbox-init
+      mode: 0755
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/base/devbox-init }
+    - path: /var/home/core/devbox/images/base/bash-prompt-xterm
+      mode: 0755
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/base/bash-prompt-xterm }
+    - path: /var/home/core/devbox/images/base/shpool.toml
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/base/shpool.toml }
+    - path: /var/home/core/devbox/images/claude/Containerfile
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/claude/Containerfile }
+    - path: /var/home/core/devbox/images/omp/Containerfile
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/images/omp/Containerfile }
+
+    - path: /var/home/core/devbox/omp/models.yml
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: devbox/omp/models.yml }
+
+    - path: /var/home/core/.config/containers/systemd/claude.container
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: .config/containers/systemd/claude.container }
+    - path: /var/home/core/.config/containers/systemd/omp.container
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: .config/containers/systemd/omp.container }
+
+    - path: /var/home/core/.config/systemd/user/devbox-build.service
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: .config/systemd/user/devbox-build.service }
+    - path: /var/home/core/.config/systemd/user/devbox-refresh.service
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: .config/systemd/user/devbox-refresh.service }
+    - path: /var/home/core/.config/systemd/user/devbox-refresh.timer
+      mode: 0644
+      user: { name: core }
+      group: { name: core }
+      contents: { local: .config/systemd/user/devbox-refresh.timer }
+
+  links:
+    - path: /var/home/core/.config/systemd/user/timers.target.wants/devbox-refresh.timer
+      target: /var/home/core/.config/systemd/user/devbox-refresh.timer
+      user: { name: core }
+      group: { name: core }

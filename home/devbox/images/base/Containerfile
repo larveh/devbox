@@ -1,0 +1,39 @@
+# Shared base for the claude and omp containers.
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf -y install --setopt=install_weak_deps=False \
+        bash-completion curl diffutils fd-find findutils gcc gh git jq less make \
+        ncurses nodejs npm openssh-clients patch procps-ng python3 ripgrep sudo \
+        tar unzip which xz \
+    && dnf clean all
+
+# shpool: keeps sessions alive across disconnects without taking over the
+# terminal, so your terminal's own scrollback keeps working.
+ARG SHPOOL_VERSION=0.11.5
+RUN mkdir /tmp/shpool \
+    && curl -fsSL "https://github.com/shell-pool/shpool/releases/download/v${SHPOOL_VERSION}/shpool-x86_64-unknown-linux-musl.tar.gz" \
+        | tar -xz -C /tmp/shpool \
+    && install -m 0755 "$(find /tmp/shpool -type f -name shpool | head -n1)" /usr/local/bin/shpool \
+    && rm -rf /tmp/shpool
+
+# uid/gid 1000 matches `core` on the host (mapped with UserNS=keep-id).
+RUN groupadd -g 1000 dev \
+    && useradd -m -u 1000 -g 1000 -s /bin/bash dev \
+    && echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev
+
+COPY --chmod=0755 devbox-init /usr/local/bin/devbox-init
+COPY shpool.toml /etc/shpool/config.toml
+COPY --chmod=0755 bash-prompt-xterm /etc/sysconfig/bash-prompt-xterm
+
+# shpool starts sessions as login shells with a minimal environment, so
+# anything sessions need goes in /etc/profile.d/devbox.sh as well as ENV
+# (the child images append to it).
+ENV XDG_RUNTIME_DIR=/tmp/xdg-dev \
+    COLORTERM=truecolor
+RUN printf '%s\n' \
+        'export COLORTERM=truecolor' \
+        'case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH=/usr/local/bin:$PATH ;; esac' \
+        > /etc/profile.d/devbox.sh
+USER dev
+WORKDIR /work
+CMD ["/usr/local/bin/devbox-init"]

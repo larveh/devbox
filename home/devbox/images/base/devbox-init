@@ -1,0 +1,5 @@
+#!/bin/sh
+# Container main process: the shpool daemon that owns all sessions.
+set -e
+mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+exec shpool daemon

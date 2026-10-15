@@ -1,0 +1,21 @@
+# oh-my-pi custom providers. Mounted read-only at ~/.omp/agent/models.yml
+# in the omp container. This default defines none; to add your own, put a
+# models.yml at devbox/omp/models.yml in your overlay (see README,
+# "Local overrides"), then `devbox deploy && devbox restart`.
+#
+# Example: an OpenAI-compatible server (llama.cpp, vLLM, …) on your LAN.
+# providers:
+#   local:
+#     baseUrl: http://192.0.2.10:8080/v1
+#     api: openai-completions
+#     auth: none
+#     models:
+#       - id: my-model
+#         name: My local model
+#         reasoning: true
+#         supportsTools: true
+#         input: [text]
+#         contextWindow: 32768
+#         maxTokens: 8192
+#         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+providers: {}

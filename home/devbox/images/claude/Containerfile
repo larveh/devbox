@@ -1,0 +1,13 @@
+FROM localhost/devbox-base:latest
+
+# Installed into the image (not the home volume) so a rebuild updates it;
+# devbox-refresh.timer rebuilds weekly, so the self-updater is off.
+USER root
+RUN curl -fsSL https://claude.ai/install.sh | HOME=/tmp/ci bash \
+    && install -m 0755 "$(readlink -f /tmp/ci/.local/bin/claude)" /usr/local/bin/claude \
+    && rm -rf /tmp/* /tmp/.[!.]*
+# (Root build steps inherit XDG_RUNTIME_DIR=/tmp/xdg-dev; clearing /tmp keeps
+# a root-owned copy of it from blocking shpool at runtime.)
+ENV DISABLE_AUTOUPDATER=1
+RUN echo 'export DISABLE_AUTOUPDATER=1' >> /etc/profile.d/devbox.sh
+USER dev
