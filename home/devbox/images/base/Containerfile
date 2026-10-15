@@ -16,7 +16,7 @@ RUN mkdir /tmp/shpool \
     && install -m 0755 "$(find /tmp/shpool -type f -name shpool | head -n1)" /usr/local/bin/shpool \
     && rm -rf /tmp/shpool
 
-# uid/gid 1000 matches `core` on the host (mapped with UserNS=keep-id).
+# uid/gid 1000: UserNS=keep-id:uid=1000 maps your host user onto it.
 RUN groupadd -g 1000 dev \
     && useradd -m -u 1000 -g 1000 -s /bin/bash dev \
     && echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev

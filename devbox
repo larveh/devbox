@@ -1,5 +1,6 @@
 #!/bin/bash
-# Manage the claude/omp dev containers on a Fedora CoreOS host over SSH.
+# Manage the claude/omp dev containers on a Linux host over SSH
+# (rootless Podman with Quadlet, so Podman 4.4 or newer and systemd).
 set -euo pipefail
 
 # Personal settings (DEVBOX_HOST, DEVBOX_OVERLAY) can live in a config file
@@ -10,8 +11,8 @@ config=${XDG_CONFIG_HOME:-$HOME/.config}/devbox/config
 
 host=${DEVBOX_HOST:-devbox}
 repo=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-# Optional directory that mirrors /var/home/core like home/ does; its files
-# are laid over home/ on deploy and ignition (e.g. devbox/omp/models.yml).
+# Optional directory that mirrors your home on the host like home/ does; its
+# files are laid over home/ on deploy (e.g. devbox/omp/models.yml).
 overlay=${DEVBOX_OVERLAY:-}
 if [[ -n $overlay && ! -d $overlay ]]; then
     echo "DEVBOX_OVERLAY=$overlay is not a directory." >&2
@@ -31,8 +32,6 @@ usage: devbox <command>
   deploy             copy config to $host, build images, start containers
   refresh            rebuild images now with the latest claude/omp
   restart            restart containers onto the newest images (ends sessions)
-  ignition           print Ignition JSON for a fresh install (uses your
-                     SSH agent's public keys for user core)
 
 Set DEVBOX_HOST to target a host other than "devbox", and DEVBOX_OVERLAY to a
 directory of your own files to lay over home/ (both can go in $config).
@@ -61,6 +60,18 @@ case ${1:-} in
         ssh "$host" 'systemctl --user --no-pager status devbox-build.service claude.service omp.service devbox-refresh.timer | grep -E "^(●|○|×)|Active:|Trigger:"; echo; podman ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"'
         ;;
     deploy)
+        echo ">> checking $host"
+        # Quadlet (generating units from ~/.config/containers/systemd) needs
+        # Podman 4.4.
+        ssh "$host" bash -s <<'CHECK'
+v=$(podman version --format '{{.Client.Version}}' 2>/dev/null) \
+    || { echo "podman is not installed" >&2; exit 1; }
+IFS=. read -r major minor _ <<< "$v"
+(( major > 4 || (major == 4 && minor >= 4) )) \
+    || { echo "podman $v is too old, Quadlet needs 4.4 or newer" >&2; exit 1; }
+systemctl --user show-environment >/dev/null 2>&1 \
+    || { echo "no systemd user manager for $(id -un)" >&2; exit 1; }
+CHECK
         echo ">> copying files to $host"
         {
             tar -C "$repo/home" -cf - devbox .config
@@ -85,16 +96,6 @@ case ${1:-} in
         read -rp "This ends all open sessions in claude and omp. Continue? [y/N] " ok
         [[ $ok == [yY]* ]] || exit 1
         ssh "$host" 'systemctl --user restart claude.service omp.service'
-        ;;
-    ignition)
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        cp -a "$repo/home/." "$tmp/"
-        [[ -z $overlay ]] || cp -a "$overlay/." "$tmp/"
-        ssh-add -L > "$tmp/authorized_keys" 2>/dev/null \
-            || { echo "No keys in the SSH agent; load one with ssh-add first." >&2; exit 1; }
-        podman run --rm -i -v "$tmp:/files:ro,z" quay.io/coreos/butane:release \
-            --strict --pretty --files-dir /files < "$repo/devbox.bu"
         ;;
     *)
         usage
