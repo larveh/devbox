@@ -7,7 +7,7 @@ After=devbox-build.service
 ContainerName=claude
 HostName=claude
 Image=localhost/devbox-claude:latest
-# Container user `dev` (1000) is `core` on the host, so /work stays owned by core.
+# Container user `dev` (1000) is your user on the host, so /work stays yours.
 UserNS=keep-id:uid=1000,gid=1000
 Volume=claude-home:/home/dev
 # Lowercase z: the workspace is shared with the omp container.
